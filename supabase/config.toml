@@ -1,0 +1,103 @@
+project_id = "hxfhubhijampubrsqfhg"
+
+[functions.send-credentials]
+verify_jwt = true
+
+[functions.create-user]
+verify_jwt = true
+
+[functions.reset-user-password]
+verify_jwt = true
+
+[functions.cte-cancel]
+verify_jwt = true
+
+[functions.cte-issue]
+verify_jwt = true
+
+[functions.cte-anulacao]
+verify_jwt = true
+
+[functions.cte-carta-correcao]
+verify_jwt = true
+
+[functions.cte-download]
+verify_jwt = true
+
+[functions.mdfe-issue]
+verify_jwt = true
+
+[functions.mdfe-encerramento]
+verify_jwt = true
+
+[functions.notify-due-accounts]
+verify_jwt = false
+
+[functions.check-cnh-expiry]
+verify_jwt = false
+
+[functions.fiscal-document-lookup]
+verify_jwt = true
+
+[functions.fuel-alerts-monitor]
+verify_jwt = false
+
+[functions.smart-assistant]
+verify_jwt = true
+
+[functions.ai-chat]
+verify_jwt = true
+
+[functions.asaas-create-customer]
+verify_jwt = true
+
+[functions.asaas-create-subscription]
+verify_jwt = true
+
+[functions.asaas-webhook]
+verify_jwt = false
+
+[functions.asaas-create-payment]
+verify_jwt = true
+
+[functions.certificate-upload]
+verify_jwt = true
+
+[functions.nuvem-fiscal-companies]
+verify_jwt = true
+
+[functions.nuvem-fiscal-register-company]
+verify_jwt = true
+
+[functions.asaas-cancel-payment]
+verify_jwt = true
+
+[functions.calculate-route-ufs]
+verify_jwt = false
+
+[functions.cte-convert-draft]
+verify_jwt = true
+
+[functions.read-odometer]
+verify_jwt = true
+
+[functions.read-receipt]
+verify_jwt = true
+
+[functions.read-cte-photo]
+verify_jwt = false
+
+[functions.customer-portal-validate]
+verify_jwt = false
+
+[functions.customer-portal-submit]
+verify_jwt = false
+
+[functions.customer-portal-approve]
+verify_jwt = false
+
+[functions.customer-portal-history]
+verify_jwt = false
+
+[functions.generate-freight-table]
+verify_jwt = false

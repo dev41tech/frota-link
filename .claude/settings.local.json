@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l \"C:\\\\Users\\\\nathan.carvalho\\\\Documents\\\\frota-link\\\\supabase\\\\migrations\"/*.sql)",
+      "Bash(grep -l \"CREATE TABLE.*freight\" \"C:\\\\Users\\\\nathan.carvalho\\\\Documents\\\\frota-link\\\\supabase\\\\migrations\"/*.sql)",
+      "Bash(grep -l \"CREATE TABLE.*announcement\\\\|CREATE TABLE.*incident\\\\|CREATE TABLE.*announcement\" \"C:\\\\Users\\\\nathan.carvalho\\\\Documents\\\\frota-link\\\\supabase\\\\migrations\"/*.sql)",
+      "Bash(grep -l \"CREATE TABLE.*vehicle_maintenance\\\\|CREATE TABLE.*tire\\\\|CREATE TABLE.*parties\\\\|CREATE TABLE.*vehicle_assignment\" \"C:\\\\Users\\\\nathan.carvalho\\\\Documents\\\\frota-link\\\\supabase\\\\migrations\"/*.sql)",
+      "Bash(ls -1 \"C:\\\\Users\\\\nathan.carvalho\\\\Documents\\\\frota-link\\\\supabase\\\\migrations\"/*.sql)",
+      "Bash(\"C:/Users/nathan.carvalho/Documents/frota-link/backend/package.json\":*)",
+      "Bash(\"C:/Users/nathan.carvalho/Documents/frota-link/backend/tsconfig.json\":*)",
+      "Bash(\"C:/Users/nathan.carvalho/Documents/frota-link/backend/.env.example\":*)",
+      "Bash(Get-Content \"C:\\\\Users\\\\nathan.carvalho\\\\Documents\\\\frota-link\\\\mysql\\\\schema.mysql.sql\")",
+      "Bash(Select-Object -Last 50)"
+    ]
+  }
+}

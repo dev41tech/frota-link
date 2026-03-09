@@ -1,0 +1,35 @@
+# Frota Link - Robots.txt Otimizado
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /home/
+Disallow: /vehicles/
+Disallow: /drivers/
+Disallow: /journeys/
+Disallow: /cte/
+Disallow: /accounts/
+Disallow: /fuel/
+Disallow: /settings/
+
+# Sitemap
+Sitemap: https://linkfrota.com.br/sitemap.xml
+
+# Crawl-delay para evitar sobrecarga
+Crawl-delay: 1
+
+# Bots específicos (SEO + Social)
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: LinkedInBot
+Allow: /

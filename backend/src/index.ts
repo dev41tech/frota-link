@@ -12,10 +12,10 @@ import expensesFeatureRouter from './routes/features/expenses.js';
 import gestorPermissionsRouter from './routes/features/gestorPermissions.js';
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '3001');
+const PORT = Number(process.env.PORT || '3001');
 
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: process.env.FRONTEND_URL,
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -36,7 +36,7 @@ app.use('/api/gestor-permissions', gestorPermissionsRouter);
 // CRUD genérico (deve vir por último)
 app.use('/api', crudRouter);
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Frota-Link Backend rodando na porta ${PORT}`);
   console.log(`Database: ${process.env.DB_NAME}@${process.env.DB_HOST}:${process.env.DB_PORT}`);
 });

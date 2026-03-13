@@ -1,30 +1,42 @@
-import mysql from 'mysql2/promise';
-import dotenv from 'dotenv';
+import mysql, {
+  Pool,
+  RowDataPacket,
+  ResultSetHeader,
+} from "mysql2/promise";
 
-dotenv.config();
-
-export const pool = mysql.createPool({
-  host: process.env.MYSQL_HOST,
-  port: Number(process.env.MYSQL_PORT || 3310),
-  user: process.env.MYSQL_USER,
-  password: process.env.MYSQL_PASSWORD,
-  database: process.env.MYSQL_DATABASE,
+const pool: Pool = mysql.createPool({
+  host: process.env.DB_HOST,
+  port: Number(process.env.DB_PORT || 3310),
+  database: process.env.DB_NAME,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
 });
 
-export async function query(sql: string, params: any[] = []) {
-  const [rows] = await pool.execute(sql, params);
+export { pool };
+
+export async function queryRows<T extends RowDataPacket[]>(
+  sql: string,
+  params: unknown[] = []
+): Promise<T> {
+  const [rows] = await pool.query<T>(sql, params);
   return rows;
 }
 
-export async function queryOne(sql: string, params: any[] = []) {
-  const rows: any = await query(sql, params);
-  return rows?.[0] ?? null;
+export async function queryOne<T extends RowDataPacket>(
+  sql: string,
+  params: unknown[] = []
+): Promise<T | null> {
+  const [rows] = await pool.query<T[]>(sql, params);
+  return rows[0] ?? null;
 }
 
-export async function execute(sql: string, params: any[] = []) {
-  const [result] = await pool.execute(sql, params);
+export async function queryExec(
+  sql: string,
+  params: unknown[] = []
+): Promise<ResultSetHeader> {
+  const [result] = await pool.execute<ResultSetHeader>(sql, params);
   return result;
 }

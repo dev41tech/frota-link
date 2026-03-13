@@ -45,20 +45,20 @@ except ImportError:
 import os
 
 PG_CONFIG = {
-    "host":     os.getenv("PG_HOST",     "db.hxfhubhijampubrsqfhg.supabase.co"),
-    "port":     int(os.getenv("PG_PORT", "5432")),
-    "dbname":   os.getenv("PG_DBNAME",   "postgres"),
-    "user":     os.getenv("PG_USER",     "postgres"),
-    "password": os.getenv("PG_PASSWORD", ""),
-    "sslmode":  os.getenv("PG_SSLMODE",  "require"),
+    "host":     os.getenv("PG_HOST"),
+    "port":     int(os.getenv("PG_PORT")),
+    "dbname":   os.getenv("PG_DBNAME"),
+    "user":     os.getenv("PG_USER"),
+    "password": os.getenv("PG_PASSWORD"),
+    "sslmode":  os.getenv("PG_SSLMODE"),
 }
 
 MYSQL_CONFIG = {
-    "host":     os.getenv("MYSQL_HOST",     "127.0.0.1"),
-    "port":     int(os.getenv("MYSQL_PORT", "3306")),
-    "database": os.getenv("MYSQL_DATABASE", "frota_link"),
-    "user":     os.getenv("MYSQL_USER",     "root"),
-    "password": os.getenv("MYSQL_PASSWORD", ""),
+    "host":     os.getenv("MYSQL_HOST"),
+    "port":     int(os.getenv("MYSQL_PORT", "3310")),
+    "database": os.getenv("MYSQL_DATABASE", "frotalink"),
+    "user":     os.getenv("MYSQL_USER",     "frotalink"),   
+    "password": os.getenv("MYSQL_PASSWORD"),
     "charset":  "utf8mb4",
     "collation":"utf8mb4_unicode_ci",
 }
@@ -158,6 +158,8 @@ def _datetime_to_str(val: Any) -> Optional[str]:
         return val.strftime("%Y-%m-%d %H:%M:%S.%f")
     if isinstance(val, date):
         return val.isoformat()
+    if isinstance(val, str):
+        return val
     return str(val)
 
 def _json_to_str(val: Any) -> Optional[str]:
@@ -185,6 +187,50 @@ def _array_to_json(val: Any) -> Optional[str]:
                           ensure_ascii=False, default=str)
     return str(val)
 
+def _normalize_mysql_datetime_string(val: str) -> Optional[str]:
+    if val is None:
+        return None
+
+    s = str(val).strip()
+    if not s:
+        return None
+
+    # pega o ano antes do primeiro "-"
+    parts = s.split("-", 1)
+    if len(parts) == 2 and parts[0].isdigit():
+        year = int(parts[0])
+        if year < 1000 or year > 9999:
+            return None
+
+    return s
+
+def _is_uuid_like(val: Any) -> bool:
+    if val is None:
+        return False
+    try:
+        uuid.UUID(str(val))
+        return True
+    except Exception:
+        return False
+
+
+def _sanitize_uuid_fk(val: Any) -> Optional[str]:
+    if val is None:
+        return None
+    s = str(val).strip()
+    if not s:
+        return None
+    return s if _is_uuid_like(s) else None
+
+
+def _sanitize_url(val: Any, max_len: int = 500) -> Optional[str]:
+    if val is None:
+        return None
+    s = str(val).strip()
+    if not s:
+        return None
+    return s[:max_len]
+
 # =============================================================
 # CONFIGURAÇÃO DE TRANSFORMAÇÕES POR TABELA
 # Colunas listadas aqui recebem tratamento especial.
@@ -197,6 +243,22 @@ COLUMN_TRANSFORMS: dict[str, dict[str, callable]] = {
     "saved_couplings": {
         "trailer_ids": _array_to_json,
     },
+
+    "fuel_expenses": {
+        "receipt_url": _sanitize_url,
+    },
+
+    "expenses": {
+        "receipt_url": _sanitize_url,
+    },
+
+    "accounts_payable": {
+        "supplier_id": _sanitize_uuid_fk,
+    },
+
+    "revenue": {
+        "customer_id": _sanitize_uuid_fk,
+    },
 }
 
 # Colunas que são arrays em qualquer tabela (fallback genérico)
@@ -205,6 +267,73 @@ ARRAY_COLUMNS = {"specialties", "trailer_ids"}
 # Colunas que são booleans em Postgres (mas não detectadas automaticamente)
 # psycopg2 normalmente converte bool para bool Python automaticamente.
 
+COLUMN_RENAMES: dict[str, dict[str, str]] = {
+    "expenses": {
+        "financial_account_id": "account_id",
+    },
+    "revenue": {
+        "financial_account_id": "account_id"
+    },
+    "tire_assets": {
+        "condition": "tire_condition",
+    },
+}
+
+COLUMN_OMIT: dict[str, set[str]] = {
+    "cte_settings": {"ie_emitente"},
+    "vehicles": {"current_fuel_level", "fuel_level_last_updated"},
+    "fuel_expenses": {
+        "fuel_consumed",
+        "tank_level_before",
+        "tank_level_after",
+        "distance_traveled",
+        "financial_account_id",
+    },
+}
+
+DATE_AS_TEXT_COLUMNS: dict[str, set[str]] = {
+    "journeys": {
+        "freight_received_date",
+        "freight_due_date",
+        "start_date",
+        "end_date",
+        "closure_requested_at",
+        "closed_at",
+        "created_at",
+        "updated_at",
+    },
+    "journey_legs": {
+        "freight_due_date",
+        "freight_received_date",
+        "created_at",
+        "updated_at",
+    },
+    "accounts_payable": {
+        "due_date",
+        "payment_date",
+        "reconciled_at",
+        "deleted_at",
+        "created_at",
+        "updated_at",
+    },
+    "revenue": {
+        "date",
+        "reconciled_at",
+        "deleted_at",
+        "created_at",
+        "updated_at",
+    },
+}
+
+REQUIRED_DATE_DEFAULTS: dict[str, dict[str, str]] = {
+    "accounts_payable": {
+        "due_date": "1970-01-01 00:00:00.000000",
+    },
+    "revenue": {
+        "date": "1970-01-01 00:00:00.000000",
+    },
+}
+
 # =============================================================
 # HELPER: conversão genérica de valor
 # =============================================================
@@ -212,30 +341,63 @@ def sanitize_value(col_name: str, val: Any, table: str) -> Any:
     """
     Aplica transformação específica ou genérica ao valor.
     """
-    # 1. Transformação específica da tabela/coluna
     if table in COLUMN_TRANSFORMS and col_name in COLUMN_TRANSFORMS[table]:
-        return COLUMN_TRANSFORMS[table][col_name](val)
+        transformed = COLUMN_TRANSFORMS[table][col_name](val)
+        if transformed is None and col_name in REQUIRED_DATE_DEFAULTS.get(table, {}):
+            return REQUIRED_DATE_DEFAULTS[table][col_name]
+        return transformed
 
-    # 2. Transformações genéricas por tipo Python
     if val is None:
+        if col_name in REQUIRED_DATE_DEFAULTS.get(table, {}):
+            return REQUIRED_DATE_DEFAULTS[table][col_name]
         return None
+
     if isinstance(val, uuid.UUID):
         return str(val)
+
     if isinstance(val, bool):
         return 1 if val else 0
+
+    if col_name in DATE_AS_TEXT_COLUMNS.get(table, set()):
+        if isinstance(val, datetime):
+            result = _datetime_to_str(val)
+            if result is None and col_name in REQUIRED_DATE_DEFAULTS.get(table, {}):
+                return REQUIRED_DATE_DEFAULTS[table][col_name]
+            return result
+
+        if isinstance(val, date):
+            result = val.isoformat()
+            if result is None and col_name in REQUIRED_DATE_DEFAULTS.get(table, {}):
+                return REQUIRED_DATE_DEFAULTS[table][col_name]
+            return result
+
+        if isinstance(val, str):
+            result = _normalize_mysql_datetime_string(val)
+            if result is None and col_name in REQUIRED_DATE_DEFAULTS.get(table, {}):
+                return REQUIRED_DATE_DEFAULTS[table][col_name]
+            return result
+
     if isinstance(val, datetime):
         return _datetime_to_str(val)
+
     if isinstance(val, date):
         return val.isoformat()
+
     if isinstance(val, Decimal):
         return float(val)
+
     if isinstance(val, dict):
         return _json_to_str(val)
+
     if isinstance(val, list):
-        # Array genérico → JSON
         return _array_to_json(val)
+
+    if isinstance(val, str):
+        return val
+
     if isinstance(val, memoryview):
         return bytes(val)
+
     return val
 
 # =============================================================
@@ -255,7 +417,7 @@ def batched(iterable, size: int) -> Generator:
 # CORE: migrar uma tabela
 # =============================================================
 def migrate_table(
-    pg_cur,
+    pg_conn,
     mysql_conn: MySQLConnection,
     table: str,
     batch_size: int,
@@ -263,48 +425,102 @@ def migrate_table(
 ) -> tuple[int, int]:
     """
     Retorna (rows_read, rows_upserted).
-    Usa INSERT ... ON DUPLICATE KEY UPDATE para idempotência.
+    Usa cursor normal para metadata e named cursor só para streaming.
     """
+    meta_cur = pg_conn.cursor()
+
     # Contar registros na origem
-    pg_cur.execute(f"SELECT COUNT(*) FROM public.{table}")
-    total = pg_cur.fetchone()[0]
+    meta_cur.execute(f"SELECT COUNT(*) FROM public.{table}")
+    total = meta_cur.fetchone()[0]
 
     if total == 0:
+        meta_cur.close()
         print(f"  ⚠  {table}: 0 registros — pulando.")
         return 0, 0
 
     print(f"  → {table}: {total:,} registros", end="", flush=True)
 
     if dry_run:
-        print(f" [DRY-RUN]")
+        meta_cur.close()
+        print(" [DRY-RUN]")
         return total, 0
 
     # Buscar schema de colunas
-    pg_cur.execute(f"""
-        SELECT column_name
+    # Buscar schema de colunas do Postgres
+    meta_cur.execute("""
+        SELECT column_name, data_type
         FROM information_schema.columns
         WHERE table_schema = 'public'
           AND table_name   = %s
         ORDER BY ordinal_position
     """, (table,))
-    pg_columns = [row[0] for row in pg_cur.fetchall()]
+    pg_column_meta = meta_cur.fetchall()
+    meta_cur.close()
+
+    # Aplicar COLUMN_OMIT primeiro
+    pg_column_meta = [
+        (col_name, data_type)
+        for col_name, data_type in pg_column_meta
+        if col_name not in COLUMN_OMIT.get(table, set())
+    ]
+
+    # Mapear nome PG -> nome MySQL
+    mapped_column_meta = [
+        (pg_col, COLUMN_RENAMES.get(table, {}).get(pg_col, pg_col), data_type)
+        for pg_col, data_type in pg_column_meta
+    ]
+
+    # Buscar colunas reais do MySQL
+    mysql_meta_cur = mysql_conn.cursor()
+    mysql_meta_cur.execute("""
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = %s
+          AND TABLE_NAME = %s
+    """, (MYSQL_CONFIG["database"], table))
+    mysql_existing_columns = {row[0] for row in mysql_meta_cur.fetchall()}
+    mysql_meta_cur.close()
+
+    # Manter só as colunas que realmente existem no destino
+    mapped_column_meta = [
+        (pg_col, my_col, data_type)
+        for pg_col, my_col, data_type in mapped_column_meta
+        if my_col in mysql_existing_columns
+    ]
+
+    pg_columns = [pg_col for pg_col, _, _ in mapped_column_meta]
+    mysql_columns = [my_col for _, my_col, _ in mapped_column_meta]
 
     if not pg_columns:
-        print(f"\n  ✗ {table}: colunas não encontradas no Postgres — pulando.")
+        print(f"\n  ✗ {table}: colunas não encontradas no Postgres/compatíveis no MySQL — pulando.")
         return 0, 0
 
-    # Carregar dados em batches via server-side cursor
-    pg_cur.execute(f"SELECT {', '.join(pg_columns)} FROM public.{table}")
+    # Named cursor apenas para streaming dos dados
+    stream_cur = pg_conn.cursor(
+        name=f"cur_{table}",
+        cursor_factory=psycopg2.extras.DictCursor
+    )
+    stream_cur.itersize = batch_size
+
+    # Monta SELECT já filtrado e na ordem final correta
+    select_cols = []
+    for pg_col, _, data_type in mapped_column_meta:
+        if data_type in ("date", "timestamp without time zone", "timestamp with time zone"):
+            select_cols.append(f"to_char({pg_col}, 'YYYY-MM-DD HH24:MI:SS.US') AS {pg_col}")
+        else:
+            select_cols.append(pg_col)
+
+    stream_cur.execute(f"SELECT {', '.join(select_cols)} FROM public.{table}")
 
     mysql_cur = mysql_conn.cursor()
     upserted = 0
 
-    col_list  = ", ".join(f"`{c}`" for c in pg_columns)
-    placeholders = ", ".join(["%s"] * len(pg_columns))
+    col_list = ", ".join(f"`{c}`" for c in mysql_columns)
+    placeholders = ", ".join(["%s"] * len(mysql_columns))
     update_clause = ", ".join(
         f"`{c}` = VALUES(`{c}`)"
-        for c in pg_columns
-        if c != "id"  # não atualizar PK
+        for c in mysql_columns
+        if c != "id"
     )
 
     insert_sql = (
@@ -313,7 +529,7 @@ def migrate_table(
         f"ON DUPLICATE KEY UPDATE {update_clause}"
     )
 
-    for batch_rows in batched(pg_cur, batch_size):
+    for batch_rows in batched(stream_cur, batch_size):
         mysql_rows = []
         for row in batch_rows:
             sanitized = tuple(
@@ -321,6 +537,10 @@ def migrate_table(
                 for col, val in zip(pg_columns, row)
             )
             mysql_rows.append(sanitized)
+
+        print(f"\n  Tabela: {table}")
+        print(f"  Colunas PG: {pg_columns}")
+        print(f"  Colunas MySQL: {mysql_columns}")
 
         try:
             mysql_cur.executemany(insert_sql, mysql_rows)
@@ -330,8 +550,11 @@ def migrate_table(
         except Exception as e:
             mysql_conn.rollback()
             print(f"\n  ✗ Erro no batch de {table}: {e}")
+            stream_cur.close()
+            mysql_cur.close()
             raise
 
+    stream_cur.close()
     mysql_cur.close()
     print(f" ✓ {upserted:,} linhas")
     return total, upserted
@@ -381,7 +604,7 @@ def main():
     print("Conectando ao PostgreSQL (Supabase)... ", end="")
     try:
         pg_conn = psycopg2.connect(**PG_CONFIG)
-        pg_conn.autocommit = True
+        pg_conn.autocommit = False
         print("OK")
     except Exception as e:
         print(f"FALHA\n  {e}")
@@ -403,12 +626,8 @@ def main():
     mysql_cur.execute("SET NAMES utf8mb4")
     mysql_cur.execute("SET time_zone = '+00:00'")
     mysql_cur.execute("SET foreign_key_checks = 0")  # desabilitar durante carga
-    mysql_cur.execute("SET GLOBAL max_allowed_packet = 67108864")  # 64MB para XML/blobs
+    # mysql_cur.execute("SET GLOBAL max_allowed_packet = 67108864")  # 64MB para XML/blobs
     mysql_cur.close()
-
-    # Usar cursor server-side no Postgres para streaming de grandes tabelas
-    pg_cur = pg_conn.cursor(name="frota_link_migration", cursor_factory=psycopg2.extras.DictCursor)
-    pg_cur.itersize = args.batch_size
 
     total_read = 0
     total_upserted = 0
@@ -418,15 +637,7 @@ def main():
 
     for table in tables_to_migrate:
         try:
-            # Server-side cursors não podem ser reutilizados – criar novo para cada tabela
-            pg_cur.close()
-            pg_cur = pg_conn.cursor(
-                name=f"cur_{table}",
-                cursor_factory=psycopg2.extras.DictCursor
-            )
-            pg_cur.itersize = args.batch_size
-
-            r, u = migrate_table(pg_cur, mysql_conn, table, args.batch_size, args.dry_run)
+            r, u = migrate_table(pg_conn, mysql_conn, table, args.batch_size, args.dry_run)
             total_read += r
             total_upserted += u
         except Exception:
@@ -443,7 +654,6 @@ def main():
     mysql_conn.commit()
 
     # Fechar conexões
-    pg_cur.close()
     pg_conn.close()
     mysql_conn.close()
 
@@ -451,6 +661,8 @@ def main():
     print(f"Migração concluída.")
     print(f"  Registros lidos (Postgres):   {total_read:,}")
     print(f"  Registros inseridos (MySQL):  {total_upserted:,}")
+    if table in COLUMN_RENAMES:
+        print(f"\n ↺ Renomeando colunas em {table}: {COLUMN_RENAMES[table]}")
     if failed_tables:
         print(f"  ✗ Tabelas com erro: {', '.join(failed_tables)}")
         print("\n  ⚠  Revise os erros acima e re-execute somente as tabelas falhas:")

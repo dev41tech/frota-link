@@ -12,7 +12,7 @@ import expensesFeatureRouter from './routes/features/expenses.js';
 import gestorPermissionsRouter from './routes/features/gestorPermissions.js';
 
 const app = express();
-const PORT = Number(process.env.PORT || '3001');
+const PORT = Number(process.env.PORT || '3002');
 
 app.use(cors({
   origin: process.env.FRONTEND_URL,

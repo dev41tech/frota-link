@@ -14,26 +14,47 @@ import gestorPermissionsRouter from './routes/features/gestorPermissions.js';
 const app = express();
 const PORT = Number(process.env.PORT || '3002');
 
+const allowedOrigins = [
+  'https://frotalink.41tech.cloud',
+  'https://api.frotalink.41tech.cloud',
+  'http://localhost:5173',
+  'http://localhost:3000',
+];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL,
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error(`CORS bloqueado para origem: ${origin}`));
+  },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
+app.options('*', cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error(`CORS bloqueado para origem: ${origin}`));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Health check
-app.get('/api/health', (_, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+app.get('/api/health', (_, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
-// Auth (sem JWT middleware)
 app.use('/api/auth', authRouter);
-
-// Features específicas (antes do CRUD genérico para não conflitar)
 app.use('/api/financial-accounts', financialAccountsRouter);
 app.use('/api/financial-reserves', financialReservesRouter);
 app.use('/api/expenses', expensesFeatureRouter);
 app.use('/api/gestor-permissions', gestorPermissionsRouter);
-
-// CRUD genérico (deve vir por último)
 app.use('/api', crudRouter);
 
 app.listen(PORT, '0.0.0.0', () => {

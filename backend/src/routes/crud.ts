@@ -59,36 +59,41 @@ const ALLOWED_TABLES = new Set([
 const GLOBAL_TABLES = new Set(["subscription_plans", "system_settings"]);
 
 function buildWhereClause(
-  queryParams: Record<string, unknown>,
+  queryParams: Record<string, any>,
   companyId: string,
   tableName: string
-): { sql: string; params: unknown[] } {
+): { sql: string; params: any[] } {
   const conditions: string[] = [];
-  const params: unknown[] = [];
+  const params: any[] = [];
 
-  if (!GLOBAL_TABLES.has(tableName)) {
-    conditions.push("company_id = ?");
+  // Regra especial: companies não tem company_id.
+  // Usuário comum só pode enxergar a própria empresa.
+  if (tableName === 'companies') {
+    conditions.push('id = ?');
+    params.push(companyId);
+  } else if (!GLOBAL_TABLES.has(tableName)) {
+    conditions.push('company_id = ?');
     params.push(companyId);
   }
 
   const eqFilters = queryParams.eq as Record<string, string> | undefined;
-  if (eqFilters && typeof eqFilters === "object") {
+  if (eqFilters && typeof eqFilters === 'object') {
     for (const [field, value] of Object.entries(eqFilters)) {
-      conditions.push(`\`${field}\` = ?`);
+      conditions.push(`${field} = ?`);
       params.push(value);
     }
   }
 
-  const reserved = new Set(["eq", "order", "limit", "offset", "select"]);
+  const reserved = new Set(['eq', 'order', 'limit', 'offset', 'select']);
   for (const [key, val] of Object.entries(queryParams)) {
     if (!reserved.has(key) && val !== undefined) {
-      conditions.push(`\`${key}\` = ?`);
+      conditions.push(`${key} = ?`);
       params.push(val);
     }
   }
 
   return {
-    sql: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
+    sql: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '',
     params,
   };
 }
@@ -129,36 +134,47 @@ router.get("/:table", async (req: AuthRequest, res: Response) => {
 });
 
 // GET /api/:table/:id
-router.get("/:table/:id", async (req: AuthRequest, res: Response) => {
+router.get('/:table/:id', async (req: AuthRequest, res: Response) => {
   const { table, id } = req.params;
 
   if (!ALLOWED_TABLES.has(table)) {
-    res.status(403).json({ error: "Tabela não permitida" });
+    res.status(403).json({ error: 'Tabela não permitida' });
     return;
   }
 
   try {
     const companyId = req.user!.companyId;
-    const companyWhere = GLOBAL_TABLES.has(table) ? "" : "AND company_id = ?";
-    const params = GLOBAL_TABLES.has(table) ? [id] : [id, companyId];
 
-    const row = await queryOne<RowDataPacket>(
-      `SELECT * FROM \`${table}\` WHERE id = ? ${companyWhere} LIMIT 1`,
-      params
-    );
+    let sql = '';
+    let params: any[] = [];
+
+    if (table === 'companies') {
+      // usuário só pode buscar a própria empresa
+      sql = `SELECT * FROM \`${table}\` WHERE id = ? LIMIT 1`;
+      params = [companyId];
+    } else if (GLOBAL_TABLES.has(table)) {
+      sql = `SELECT * FROM \`${table}\` WHERE id = ? LIMIT 1`;
+      params = [id];
+    } else {
+      sql = `SELECT * FROM \`${table}\` WHERE id = ? AND company_id = ? LIMIT 1`;
+      params = [id, companyId];
+    }
+
+    const row = await queryOne(sql, params);
 
     if (!row) {
-      res.status(404).json({ error: "Registro não encontrado" });
+      res.status(404).json({ error: 'Registro não encontrado' });
       return;
     }
 
     res.json(row);
   } catch (err) {
     console.error(`GET /${table}/${id} error:`, err);
-    res.status(500).json({ error: "Erro ao buscar registro" });
+    res.status(500).json({ error: 'Erro ao buscar registro' });
   }
 });
 
+// POST /api/:table
 // POST /api/:table
 router.post("/:table", async (req: AuthRequest, res: Response) => {
   const { table } = req.params;
@@ -171,20 +187,22 @@ router.post("/:table", async (req: AuthRequest, res: Response) => {
   try {
     const companyId = req.user!.companyId;
 
-    const data: Record<string, unknown> = {
-      ...req.body,
-      id: req.body.id || uuidv4(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    if (!GLOBAL_TABLES.has(table)) {
-      data.company_id = req.body.company_id || companyId;
-    }
-
-    if (!("user_id" in data) && req.user?.userId) {
-      data.user_id = req.user.userId;
-    }
+    const data: Record<string, unknown> =
+      table === "companies"
+        ? {
+            ...req.body,
+            id: req.body.id || uuidv4(),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
+        : {
+            ...req.body,
+            id: req.body.id || uuidv4(),
+            company_id: companyId,
+            user_id: req.body.user_id || req.user!.userId,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
 
     const fields = Object.keys(data).map((k) => `\`${k}\``).join(", ");
     const placeholders = Object.keys(data).map(() => "?").join(", ");
@@ -232,15 +250,29 @@ router.put("/:table/:id", async (req: AuthRequest, res: Response) => {
       .map((k) => `\`${k}\` = ?`)
       .join(", ");
 
-    const companyWhere = GLOBAL_TABLES.has(table) ? "" : "AND company_id = ?";
-    const params = GLOBAL_TABLES.has(table)
-      ? [...Object.values(data), id]
-      : [...Object.values(data), id, companyId];
+    let result;
 
-    const result = await queryExec(
-      `UPDATE \`${table}\` SET ${setClause} WHERE id = ? ${companyWhere}`,
-      params
-    );
+    if (table === "companies") {
+      if (id !== companyId) {
+        res.status(403).json({ error: "Acesso negado" });
+        return;
+      }
+
+      result = await queryExec(
+        `UPDATE \`${table}\` SET ${setClause} WHERE id = ?`,
+        [...Object.values(data), id]
+      );
+    } else if (GLOBAL_TABLES.has(table)) {
+      result = await queryExec(
+        `UPDATE \`${table}\` SET ${setClause} WHERE id = ?`,
+        [...Object.values(data), id]
+      );
+    } else {
+      result = await queryExec(
+        `UPDATE \`${table}\` SET ${setClause} WHERE id = ? AND company_id = ?`,
+        [...Object.values(data), id, companyId]
+      );
+    }
 
     if (result.affectedRows === 0) {
       res.status(404).json({ error: "Registro não encontrado" });
@@ -272,13 +304,30 @@ router.delete("/:table/:id", async (req: AuthRequest, res: Response) => {
 
   try {
     const companyId = req.user!.companyId;
-    const companyWhere = GLOBAL_TABLES.has(table) ? "" : "AND company_id = ?";
-    const params = GLOBAL_TABLES.has(table) ? [id] : [id, companyId];
 
-    const result = await queryExec(
-      `DELETE FROM \`${table}\` WHERE id = ? ${companyWhere}`,
-      params
-    );
+    let result;
+
+    if (table === "companies") {
+      if (id !== companyId) {
+        res.status(403).json({ error: "Acesso negado" });
+        return;
+      }
+
+      result = await queryExec(
+        `DELETE FROM \`${table}\` WHERE id = ?`,
+        [id]
+      );
+    } else if (GLOBAL_TABLES.has(table)) {
+      result = await queryExec(
+        `DELETE FROM \`${table}\` WHERE id = ?`,
+        [id]
+      );
+    } else {
+      result = await queryExec(
+        `DELETE FROM \`${table}\` WHERE id = ? AND company_id = ?`,
+        [id, companyId]
+      );
+    }
 
     if (result.affectedRows === 0) {
       res.status(404).json({ error: "Registro não encontrado" });
@@ -293,5 +342,3 @@ router.delete("/:table/:id", async (req: AuthRequest, res: Response) => {
     });
   }
 });
-
-export default router;

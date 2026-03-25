@@ -6,6 +6,7 @@ dotenv.config();
 
 import authRouter from './routes/auth.js';
 import crudRouter from './routes/crud.js';
+import rpcRouter from './routes/rpc.js';
 import financialAccountsRouter from './routes/features/financialAccounts.js';
 import financialReservesRouter from './routes/features/financialReserves.js';
 import expensesFeatureRouter from './routes/features/expenses.js';
@@ -51,6 +52,7 @@ app.get('/api/health', (_, res) => {
 });
 
 app.use('/api/auth', authRouter);
+app.use('/api/rpc', rpcRouter);
 app.use('/api/financial-accounts', financialAccountsRouter);
 app.use('/api/financial-reserves', financialReservesRouter);
 app.use('/api/expenses', expensesFeatureRouter);

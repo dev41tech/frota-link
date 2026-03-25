@@ -342,3 +342,5 @@ router.delete("/:table/:id", async (req: AuthRequest, res: Response) => {
     });
   }
 });
+
+export default router;
